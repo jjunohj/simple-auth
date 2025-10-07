@@ -1,0 +1,535 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+# Frontend Design Guidelines
+
+## Table of Contents
+1. [Code Structure](mdc:#code-structure)
+2. [Performance](mdc:#performance)
+3. [State Management](mdc:#state-management)
+4. [Testing](mdc:#testing)
+5. [Async Handling](mdc:#async-handling)
+6. [Clean Code](mdc:#clean-code)
+
+## Code Structure
+
+### Component Organization
+
+**Rule:** Organize components by feature/domain, not by type.
+
+**Reasoning:**
+- Improves code maintainability
+- Makes feature development more efficient
+- Reduces cognitive load when navigating codebase
+
+**Guidance:**
+- Group related components together
+- Keep component files close to their usage
+- Use index files for clean exports
+
+**Example:**
+```tsx
+// Bad: Organized by type
+src/
+  components/
+    Button.tsx
+    Input.tsx
+  hooks/
+    useAuth.ts
+    useForm.ts
+
+// Good: Organized by feature
+src/
+  auth/
+    components/
+      LoginForm.tsx
+      SignupForm.tsx
+    hooks/
+      useAuth.ts
+  forms/
+    components/
+      TextInput.tsx
+      SelectInput.tsx
+    hooks/
+      useForm.ts
+```
+
+### Component Composition
+
+**Rule:** Use composition over inheritance.
+
+**Reasoning:**
+- More flexible than inheritance
+- Easier to understand and maintain
+- Better reusability
+
+**Guidance:**
+- Break down complex components into smaller ones
+- Use props for configuration
+- Use children for content
+
+**Example:**
+```tsx
+// Bad: Inheritance
+class Button extends BaseButton {
+  render() {
+    return <button className="custom-button">{this.props.children}</button>;
+  }
+}
+
+// Good: Composition
+function Button({ children, ...props }) {
+  return (
+    <BaseButton className="custom-button" {...props}>
+      {children}
+    </BaseButton>
+  );
+}
+```
+
+## Performance
+
+### React Rendering
+
+**Rule:** Optimize React rendering to prevent unnecessary re-renders.
+
+**Reasoning:**
+- Improves application performance
+- Reduces memory usage
+- Better user experience
+
+**Guidance:**
+- Use React.memo for expensive components
+- Use useMemo for expensive computations
+- Use useCallback for function props
+- Avoid inline object/function creation
+
+**Example:**
+```tsx
+// Bad: Unnecessary re-renders
+function ParentComponent() {
+  const [count, setCount] = useState(0);
+  const style = { color: 'red' };
+  const handleClick = () => setCount(count + 1);
+  
+  return (
+    <ExpensiveComponent 
+      style={style}
+      onClick={handleClick}
+    />
+  );
+}
+
+// Good: Optimized rendering
+function ParentComponent() {
+  const [count, setCount] = useState(0);
+  const style = useMemo(() => ({ color: 'red' }), []);
+  const handleClick = useCallback(() => {
+    setCount(prev => prev + 1);
+  }, []);
+  
+  return (
+    <ExpensiveComponent 
+      style={style}
+      onClick={handleClick}
+    />
+  );
+}
+```
+
+### Bundle Size
+
+**Rule:** Keep bundle size small for faster initial load.
+
+**Reasoning:**
+- Faster page load times
+- Better user experience
+- Reduced bandwidth usage
+
+**Guidance:**
+- Use code splitting
+- Implement dynamic imports
+- Optimize images and assets
+- Use tree shaking
+
+**Example:**
+```tsx
+// Bad: Large initial bundle
+import { HeavyComponent } from './HeavyComponent';
+import { AnotherHeavyComponent } from './AnotherHeavyComponent';
+
+// Good: Code splitting
+const HeavyComponent = React.lazy(() => import('./HeavyComponent'));
+const AnotherHeavyComponent = React.lazy(() => import('./AnotherHeavyComponent'));
+```
+
+## State Management
+
+### Data Fetching
+
+**Rule:** Use React Query/SWR for server state management.
+
+**Reasoning:**
+- Simplifies data fetching
+- Handles caching automatically
+- Provides loading and error states
+
+**Guidance:**
+- Separate server state from client state
+- Use query keys for cache management
+- Implement proper error handling
+- Use optimistic updates
+
+**Example:**
+```tsx
+// Bad: Manual data fetching
+function UserProfile() {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    async function fetchUser() {
+      try {
+        const response = await fetch('/api/user');
+        const data = await response.json();
+        setUser(data);
+      } catch (err) {
+        setError(err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchUser();
+  }, []);
+
+  if (loading) return <LoadingSpinner />;
+  if (error) return <ErrorMessage error={error} />;
+  return <div>{user.name}</div>;
+}
+
+// Good: Using React Query
+function UserProfile() {
+  const { data: user, isLoading, error } = useQuery({
+    queryKey: ['user'],
+    queryFn: () => fetch('/api/user').then(res => res.json())
+  });
+
+  if (isLoading) return <LoadingSpinner />;
+  if (error) return <ErrorMessage error={error} />;
+  return <div>{user.name}</div>;
+}
+```
+
+### Global State
+
+**Rule:** Choose appropriate state management solution based on needs.
+
+**Reasoning:**
+- Different solutions for different use cases
+- Avoids over-engineering
+- Maintains code simplicity
+
+**Guidance:**
+- Use Context for simple global state
+- Use Redux for complex state
+- Use Recoil/Zustand for atomic state
+- Keep state as local as possible
+
+**Example:**
+```tsx
+// Bad: Prop drilling
+function App() {
+  const [theme, setTheme] = useState('light');
+  return (
+    <div>
+      <Header theme={theme} setTheme={setTheme} />
+      <Main theme={theme} setTheme={setTheme} />
+      <Footer theme={theme} setTheme={setTheme} />
+    </div>
+  );
+}
+
+// Good: Using Context
+const ThemeContext = React.createContext();
+
+function App() {
+  const [theme, setTheme] = useState('light');
+  return (
+    <ThemeContext.Provider value={{ theme, setTheme }}>
+      <div>
+        <Header />
+        <Main />
+        <Footer />
+      </div>
+    </ThemeContext.Provider>
+  );
+}
+```
+
+## Testing
+
+### Component Testing
+
+**Rule:** Write meaningful tests for React components.
+
+**Reasoning:**
+- Ensures component reliability
+- Catches bugs early
+- Makes refactoring safer
+
+**Guidance:**
+- Test behavior, not implementation
+- Use React Testing Library
+- Test user interactions
+- Mock external dependencies
+
+**Example:**
+```tsx
+// Bad: Testing implementation details
+test('UserProfile renders correctly', () => {
+  const { container } = render(<UserProfile />);
+  expect(container.querySelector('.user-name')).toBeInTheDocument();
+});
+
+// Good: Testing user behavior
+test('UserProfile shows user information', async () => {
+  render(<UserProfile />);
+  await screen.findByText('John Doe');
+  const editButton = screen.getByRole('button', { name: /edit/i });
+  fireEvent.click(editButton);
+  expect(screen.getByLabelText(/name/i)).toBeInTheDocument();
+});
+```
+
+### Async Testing
+
+**Rule:** Test asynchronous operations properly.
+
+**Reasoning:**
+- Ensures async code reliability
+- Catches timing issues
+- Makes async code more maintainable
+
+**Guidance:**
+- Use async/await in tests
+- Mock API calls
+- Test loading states
+- Test error states
+
+**Example:**
+```tsx
+// Bad: Not handling async operations
+test('fetchUserData works', () => {
+  const result = fetchUserData();
+  expect(result).toBeDefined();
+});
+
+// Good: Proper async testing
+test('fetchUserData shows user data', async () => {
+  mockApi.get.mockResolvedValueOnce({ name: 'John Doe' });
+  render(<UserProfile />);
+  expect(screen.getByText(/loading/i)).toBeInTheDocument();
+  const userName = await screen.findByText('John Doe');
+  expect(userName).toBeInTheDocument();
+});
+```
+
+## Async Handling
+
+### Success-First Approach
+
+**Rule:** Focus on the success case first, handle errors separately.
+
+**Reasoning:**
+- Makes code more readable
+- Separates business logic from error handling
+- Makes error handling more maintainable
+
+**Guidance:**
+- Write success path first
+- Handle errors in catch blocks
+- Delegate error handling when possible
+- Keep business logic clear
+
+**Example:**
+```tsx
+// Bad: Mixed success and error handling
+async function fetchUserData() {
+  try {
+    const response = await api.get('/user');
+    if (response.ok) {
+      return response.data;
+    } else {
+      throw new Error('Failed to fetch user');
+    }
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
+}
+
+// Good: Clear separation of concerns
+async function fetchUserData() {
+  const response = await api.get('/user');
+  return response.data;
+}
+
+// Error handling delegated to caller
+try {
+  const userData = await fetchUserData();
+  // Handle success case
+} catch (error) {
+  // Handle error case
+}
+```
+
+### React Suspense
+
+**Rule:** Components should only handle success states.
+
+**Reasoning:**
+- Simplifies component logic
+- Makes error handling more consistent
+- Improves code maintainability
+
+**Guidance:**
+- Delegate loading states to Suspense
+- Delegate error states to ErrorBoundary
+- Handle states declaratively
+- Show content progressively
+
+**Example:**
+```tsx
+// Component only handles success case
+function UserProfile({ userId }) {
+  const user = useUser(userId);
+  return <div>{user.name}</div>;
+}
+
+// Usage with proper error and loading handling
+function App() {
+  return (
+    <ErrorBoundary fallback={<ErrorPage />}>
+      <Suspense fallback={<LoadingSpinner />}>
+        <UserProfile userId={1} />
+      </Suspense>
+    </ErrorBoundary>
+  );
+}
+```
+
+## Clean Code
+
+### Cohesion
+
+**Rule:** Group code with the same purpose together.
+
+**Reasoning:**
+- Makes code easier to find
+- Improves maintainability
+- Reduces cognitive load
+
+**Guidance:**
+- Keep related code together
+- Separate concerns
+- Use clear file organization
+- Follow consistent patterns
+
+**Example:**
+```tsx
+// Bad: Mixed concerns
+function processUserData(user) {
+  const formattedName = user.firstName + ' ' + user.lastName;
+  const age = new Date().getFullYear() - new Date(user.birthDate).getFullYear();
+  return { name: formattedName, age };
+}
+
+// Good: Separated concerns
+function processUserData(user) {
+  return {
+    name: formatFullName(user),
+    age: calculateAge(user.birthDate)
+  };
+}
+```
+
+### Single Responsibility
+
+**Rule:** Each function/component should have one clear responsibility.
+
+**Reasoning:**
+- Makes code easier to understand
+- Improves maintainability
+- Makes testing easier
+
+**Guidance:**
+- Create single-purpose functions
+- Create single-purpose components
+- Use descriptive names
+- Keep functions small
+
+**Example:**
+```tsx
+// Bad: Multiple responsibilities
+function handleUserSubmit(user) {
+  validateUser(user);
+  saveUser(user);
+  sendWelcomeEmail(user);
+  updateUI();
+}
+
+// Good: Single responsibility
+function handleUserSubmit(user) {
+  if (isValidUser(user)) {
+    saveUser(user);
+  }
+}
+
+function isValidUser(user) {
+  return validateUser(user);
+}
+```
+
+### Abstraction
+
+**Rule:** Extract and name important concepts in function names.
+
+**Reasoning:**
+- Makes code more readable
+- Improves maintainability
+- Makes code more reusable
+
+**Guidance:**
+- Choose appropriate abstraction level
+- Maintain consistent abstraction levels
+- Use clear naming
+- Keep abstractions simple
+
+**Example:**
+```tsx
+// Bad: Mixed abstraction levels
+function processData(data) {
+  const filtered = data.filter(x => x > 0);
+  const doubled = filtered.map(x => x * 2);
+  return doubled.reduce((a, b) => a + b, 0);
+}
+
+// Good: Consistent abstraction level
+function processData(data) {
+  return sum(doubled(filtered(data)));
+}
+
+function filtered(data) {
+  return data.filter(x => x > 0);
+}
+
+function doubled(data) {
+  return data.map(x => x * 2);
+}
+
+function sum(data) {
+  return data.reduce((a, b) => a + b, 0);
+}
